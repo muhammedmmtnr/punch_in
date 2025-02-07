@@ -1,66 +1,98 @@
+
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
-  // Updated coordinates as requested
-  static const double TARGET_LATITUDE = 11.261062457428787;
 
 class LocationService {
+  static const double TARGET_LATITUDE = 11.261062457428787;
   static const double TARGET_LONGITUDE = 75.78865503412923;
   static const int RADIUS_METERS = 50;
 
-  static Future<bool> isWithinRange() async {
-    try {
-      // Check if location services are enabled
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('Location services are disabled');
-      }
+  static String _currentAddress = '';
+  static Position? _currentPosition;
 
-      // Check location permissions
-      LocationPermission permission = await Geolocator.checkPermission();
+  static Future<void> initializeLocation() async {
+    Position position = await _getGeoLocationPosition();
+    _currentPosition = position;
+    _currentAddress = await _getAddressFromLatLong(position);
+    
+    print('Location Initialized:');
+    print('Position: ${position.latitude}, ${position.longitude}');
+    print('Address: $_currentAddress');
+  }
+
+  static Future<Position> _getGeoLocationPosition() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      await Geolocator.openLocationSettings();
+      throw Exception('Location services are disabled');
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('Location permission denied');
-        }
+        throw Exception('Location permissions are denied');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      throw Exception('Location permissions are permanently denied');
+    }
+
+    return await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.bestForNavigation
+    );
+  }
+
+  static Future<String> _getAddressFromLatLong(Position position) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude, 
+        position.longitude
+      );
+      
+      if (placemarks.isEmpty) {
+        return 'Unknown location';
       }
 
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions are permanently denied');
-      }
-
-      // Get current position with high accuracy
-      Position currentPosition = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      // Calculate distance
-      double distanceInMeters = Geolocator.distanceBetween(
-        currentPosition.latitude,
-        currentPosition.longitude,
-        TARGET_LATITUDE,
-        TARGET_LONGITUDE,
-      );
-
-      // Print debug information
-      print('Current Position: ${currentPosition.latitude}, ${currentPosition.longitude}');
-      print('Distance to target: $distanceInMeters meters');
-
-      return distanceInMeters <= RADIUS_METERS;
+      Placemark place = placemarks[0];
+      return '${place.locality}, ${place.subAdministrativeArea}, ${place.administrativeArea}';
     } catch (e) {
-      print('Location Error: $e');
-      rethrow;
+      print('Error getting address: $e');
+      return 'Error getting address';
     }
   }
 
-  static Future<double> getCurrentDistance() async {
-    Position currentPosition = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
+  static Future<bool> isWithinRange() async {
+    Position position = await _getGeoLocationPosition();
+    _currentPosition = position;
+    _currentAddress = await _getAddressFromLatLong(position);
 
-    return Geolocator.distanceBetween(
-      currentPosition.latitude,
-      currentPosition.longitude,
+    double distance = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
       TARGET_LATITUDE,
       TARGET_LONGITUDE,
     );
+
+    print('Current Location: $_currentAddress');
+    print('Distance to target: $distance meters');
+
+    return distance <= RADIUS_METERS;
+  }
+
+  // Getter methods
+  static Future<String> getAddress() async {
+    if (_currentAddress.isEmpty) {
+      await initializeLocation();
+    }
+    return _currentAddress;
+  }
+
+  static Future<Position?> getPosition() async {
+    if (_currentPosition == null) {
+      await initializeLocation();
+    }
+    return _currentPosition;
   }
 }

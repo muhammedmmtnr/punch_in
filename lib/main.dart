@@ -1,4 +1,4 @@
-// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:punch_in/provider/attendance%20provider.dart';
@@ -6,6 +6,7 @@ import 'package:punch_in/punch_in.dart';
 
 void main() {
   runApp(MyApp());
+  
 }
 
 class MyApp extends StatelessWidget {
